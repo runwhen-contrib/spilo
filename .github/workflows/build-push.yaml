@@ -38,13 +38,24 @@ jobs:
           PATRONIVERSION=$(sed -n 's/^ENV PATRONIVERSION=\([0-9.]*\).*$/\1/p' postgres-appliance/Dockerfile)
 
           if [[ "${{ inputs.pgversion }}" == "all" || -z "${{ inputs.pgversion }}" ]]; then
-            VERSIONS='["16","17","18"]'
+            MATRIX='{"include":[
+              {"pgversion":"16","pgoldversions":""},
+              {"pgversion":"17","pgoldversions":"16"},
+              {"pgversion":"18","pgoldversions":"16 17"}
+            ],"patroni_version":["'"${PATRONIVERSION}"'"]}'
           else
-            VERSIONS='["${{ inputs.pgversion }}"]'
+            # Single version build — derive correct PGOLDVERSIONS
+            PG="${{ inputs.pgversion }}"
+            case "$PG" in
+              18) OLDS="16 17" ;;
+              17) OLDS="16" ;;
+              16) OLDS="" ;;
+              *)  OLDS="" ;;
+            esac
+            MATRIX='{"include":[
+              {"pgversion":"'"$PG"'","pgoldversions":"'"$OLDS"'"}
+            ],"patroni_version":["'"${PATRONIVERSION}"'"]}'
           fi
-
-          MATRIX="{\"pgversion\":${VERSIONS},\"patroni_version\":[\"${PATRONIVERSION}\"]}"
-
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "patroni_version=${PATRONIVERSION}" >> $GITHUB_OUTPUT
 
@@ -80,6 +91,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test
           build-args: |
             PGVERSION=${{ matrix.pgversion }}
+            PGOLDVERSIONS=${{ matrix.pgoldversions }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -134,6 +146,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             PGVERSION=${{ matrix.pgversion }}
+            PGOLDVERSIONS=${{ matrix.pgoldversions }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
