@@ -72,6 +72,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install docker-compose (for tests)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq docker-compose-v2
+          sudo ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
