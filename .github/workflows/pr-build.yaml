@@ -23,7 +23,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
 
       - name: Run Trivy vulnerability scanner on repo
         uses: aquasecurity/trivy-action@0.29.0
@@ -52,7 +51,6 @@ jobs:
       pgversion: ${{ steps.meta.outputs.pgversion }}
     steps:
       - uses: actions/checkout@v4
-        with:
 
       - name: Extract build metadata
         id: meta
@@ -74,7 +72,6 @@ jobs:
     needs: [scan-fs, derive]
     steps:
       - uses: actions/checkout@v4
-        with:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
