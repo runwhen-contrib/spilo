@@ -22,10 +22,10 @@ jobs:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run Trivy vulnerability scanner on repo
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: 'postgres-appliance/'
@@ -50,7 +50,7 @@ jobs:
       image_name: ${{ steps.meta.outputs.image_name }}
       pgversion: ${{ steps.meta.outputs.pgversion }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Extract build metadata
         id: meta
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [scan-fs, derive]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

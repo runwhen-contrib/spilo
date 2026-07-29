@@ -28,7 +28,7 @@ jobs:
       pgversion: ${{ steps.meta.outputs.pgversion }}
       patroni_version: ${{ steps.meta.outputs.patroni_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Extract build metadata
         id: meta
@@ -62,7 +62,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.build.outputs.image_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -103,7 +103,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -140,7 +140,7 @@ jobs:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -150,7 +150,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scanner on built image
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: '${{ needs.derive.outputs.image_name }}:${{ needs.derive.outputs.patroni_version }}'
           format: 'sarif'
