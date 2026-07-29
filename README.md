@@ -7,7 +7,7 @@ RunWhen-maintained [Spilo](https://github.com/zalando/spilo) PostgreSQL + Patron
 The upstream [zalando/spilo](https://github.com/zalando/spilo) project does not publish regular Docker image releases. This fork:
 
 - **Builds independently from upstream master** to resolve CVEs on our schedule
-- **Publishes multi-arch images** (`linux/amd64`, `linux/arm64`) to GHCR
+- **Publishes container images** to GHCR (amd64 by default; arm64 available via workflow input)
 - **Scans every build** with Trivy (CRITICAL + HIGH severity)
 - **Auto-updates dependencies** via Renovatebot
 - **Supports PostgreSQL 16, 17, 18** (matching upstream)
@@ -64,7 +64,7 @@ SPILO_TEST_IMAGE=spilo:local bash postgres-appliance/tests/test_spilo.sh
 
 | Workflow | Trigger | What It Does |
 |---|---|---|
-| `build-push.yaml` | Push to `main`, tag push, manual | Build → test → push multi-arch to GHCR → scan |
+| `build-push.yaml` | Push to `main`, tag push, manual | Build → test → push to GHCR → scan (amd64 by default; `multiarch` input for arm64) |
 | `pr-build.yaml` | PR opened against `main` | Trivy fs scan → build → integration test |
 | `trivy-scheduled.yaml` | Weekly (Mondays), manual | Scan all published PG version images |
 | `renovate.yml` | Daily, manual | Auto-update dependencies |
