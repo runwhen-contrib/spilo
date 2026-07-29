@@ -39,7 +39,7 @@ jobs:
 
           build_matrix() {
             local pg=$1 olds=$2
-            printf '{"pgversion":"%s","pgoldversions":"%s"}' "$pg" "$olds"
+            printf '{"pgversion":"%s","pgoldversions":"%s","patroni_version":"%s"}' "$pg" "$olds" "$PATRONIVERSION"
           }
 
           if [[ "${{ inputs.pgversion }}" == "all" || -z "${{ inputs.pgversion }}" ]]; then
@@ -50,7 +50,7 @@ jobs:
             ENTRIES="$(build_matrix "$PG" "$OLDS")"
           fi
 
-          MATRIX="{\"include\":[${ENTRIES}],\"patroni_version\":[\"${PATRONIVERSION}\"]}"
+          MATRIX="{\"include\":[${ENTRIES}]}"
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "patroni_version=${PATRONIVERSION}" >> $GITHUB_OUTPUT
 
