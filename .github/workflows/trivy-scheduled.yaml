@@ -39,7 +39,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.29.0
         with:
-          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ inputs.image_tag || '' }}latest'
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ inputs.image_tag }}'
           format: 'sarif'
           output: 'trivy-spilo-${{ matrix.pgversion }}-results.sarif'
           severity: 'CRITICAL,HIGH'

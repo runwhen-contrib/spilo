@@ -33,20 +33,15 @@ jobs:
       - name: Extract build metadata
         id: meta
         run: |
-          PGVERSION=$(sed -n 's/^ARG PGVERSION=\([1-9][0-9]*\).*$/\1/p' spilo-upstream/postgres-appliance/Dockerfile)
-          PATRONIVERSION=$(sed -n 's/^ENV PATRONIVERSION=\([0-9.]*\).*$/\1/p' spilo-upstream/postgres-appliance/Dockerfile)
+          PGVERSION=$(sed -n 's/^ARG PGVERSION=\([1-9][0-9]*\).*$/\1/p' postgres-appliance/Dockerfile)
+          PATRONIVERSION=$(sed -n 's/^ENV PATRONIVERSION=\([0-9.]*\).*$/\1/p' postgres-appliance/Dockerfile)
 
-          # Use input PGVERSION if provided via workflow_dispatch
           if [[ -n "${{ inputs.pgversion }}" ]]; then
             PGVERSION="${{ inputs.pgversion }}"
           fi
 
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${PGVERSION}"
 
-          # Tag strategy:
-          #   On tag push:    use the tag itself + patroni version
-          #   On main push:   use patroni version + 'latest'
-          #   On dispatch:    use patroni version + 'latest'
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             TAG="${{ github.ref_name }}"
             TAGS="${IMAGE_NAME}:${TAG},${IMAGE_NAME}:${PATRONIVERSION}"
