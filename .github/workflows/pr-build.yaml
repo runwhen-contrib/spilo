@@ -98,6 +98,7 @@ jobs:
           tags: ${{ needs.derive.outputs.image_name }}
           build-args: |
             PGVERSION=${{ needs.derive.outputs.pgversion }}
+            PGOLDVERSIONS=14 15 16 17
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -105,5 +106,4 @@ jobs:
         env:
           SPILO_TEST_IMAGE: "${{ needs.derive.outputs.image_name }}"
         run: |
-          sed -i "s/PGVERSION: '14'/PGVERSION: '${{ needs.derive.outputs.pgversion }}'/" postgres-appliance/tests/docker-compose.yml
           bash postgres-appliance/tests/test_spilo.sh

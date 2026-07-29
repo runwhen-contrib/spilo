@@ -94,7 +94,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test
           build-args: |
             PGVERSION=${{ matrix.pgversion }}
-            PGOLDVERSIONS=${{ matrix.pgoldversions }}
+            PGOLDVERSIONS=14 15 16 17
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -103,8 +103,6 @@ jobs:
         env:
           SPILO_TEST_IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test"
         run: |
-          # docker-compose.yml hardcodes PGVERSION=14 — override to match build
-          sed -i "s/PGVERSION: '14'/PGVERSION: '${{ matrix.pgversion }}'/" postgres-appliance/tests/docker-compose.yml
           bash postgres-appliance/tests/test_spilo.sh
 
       - name: Prepare push tag reference
