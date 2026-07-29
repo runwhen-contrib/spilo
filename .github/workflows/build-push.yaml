@@ -8,10 +8,15 @@ on:
   workflow_dispatch:
     inputs:
       pgversion:
-        description: 'PostgreSQL version to build'
+        description: 'PostgreSQL version to build (default: all)'
         required: false
-        default: '18'
-        type: string
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - '16'
+          - '17'
+          - '18'
 
 env:
   REGISTRY: ghcr.io
@@ -20,45 +25,37 @@ env:
 jobs:
   # --- Derive image metadata ---
   derive:
-    name: Derive image name and tags
+    name: Derive build metadata
     runs-on: ubuntu-22.04
     outputs:
-      image_name: ${{ steps.meta.outputs.image_name }}
-      tags: ${{ steps.meta.outputs.tags }}
-      pgversion: ${{ steps.meta.outputs.pgversion }}
-      patroni_version: ${{ steps.meta.outputs.patroni_version }}
+      matrix: ${{ steps.meta.outputs.matrix }}
     steps:
       - uses: actions/checkout@v5
 
-      - name: Extract build metadata
+      - name: Determine build matrix and metadata
         id: meta
         run: |
-          PGVERSION=$(sed -n 's/^ARG PGVERSION=\([1-9][0-9]*\).*$/\1/p' postgres-appliance/Dockerfile)
           PATRONIVERSION=$(sed -n 's/^ENV PATRONIVERSION=\([0-9.]*\).*$/\1/p' postgres-appliance/Dockerfile)
 
-          if [[ -n "${{ inputs.pgversion }}" ]]; then
-            PGVERSION="${{ inputs.pgversion }}"
-          fi
-
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${PGVERSION}"
-
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            TAG="${{ github.ref_name }}"
-            TAGS="${IMAGE_NAME}:${TAG},${IMAGE_NAME}:${PATRONIVERSION}"
+          if [[ "${{ inputs.pgversion }}" == "all" || -z "${{ inputs.pgversion }}" ]]; then
+            VERSIONS='["16","17","18"]'
           else
-            TAGS="${IMAGE_NAME}:${PATRONIVERSION},${IMAGE_NAME}:latest"
+            VERSIONS='["${{ inputs.pgversion }}"]'
           fi
 
-          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
-          echo "pgversion=${PGVERSION}" >> $GITHUB_OUTPUT
+          MATRIX="{\"pgversion\":${VERSIONS},\"patroni_version\":[\"${PATRONIVERSION}\"]}"
+
+          echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "patroni_version=${PATRONIVERSION}" >> $GITHUB_OUTPUT
 
-  # --- Build & test (amd64 only, for speed) ---
+  # --- Build & test (amd64 only, one per PG version) ---
   build-test:
-    name: Build and test (amd64)
+    name: Build & test PG ${{ matrix.pgversion }}
     runs-on: ubuntu-22.04
     needs: derive
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.derive.outputs.matrix) }}
     outputs:
       image_tag: ${{ steps.build.outputs.image_tag }}
     steps:
@@ -80,30 +77,33 @@ jobs:
         with:
           context: postgres-appliance/
           load: true
-          tags: ${{ needs.derive.outputs.image_name }}:test
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test
           build-args: |
-            PGVERSION=${{ needs.derive.outputs.pgversion }}
+            PGVERSION=${{ matrix.pgversion }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Test spilo docker image
         id: test
         env:
-          SPILO_TEST_IMAGE: "${{ needs.derive.outputs.image_name }}:test"
+          SPILO_TEST_IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test"
         run: |
           bash postgres-appliance/tests/test_spilo.sh
 
-      - name: Prepare push tags
+      - name: Prepare push tag reference
         id: build
         run: |
-          echo "image_tag=${{ needs.derive.outputs.image_name }}:test" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test" >> $GITHUB_OUTPUT
 
-  # --- Build & push multi-arch (only on tag or main) ---
+  # --- Build & push multi-arch (one per PG version, only on tag/main) ---
   push-multiarch:
-    name: Push multi-arch image
+    name: Push PG ${{ matrix.pgversion }}
     runs-on: ubuntu-22.04
     needs: [derive, build-test]
     if: github.ref_type == 'tag' || github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.derive.outputs.matrix) }}
     permissions:
       contents: read
       packages: write
@@ -128,19 +128,24 @@ jobs:
         with:
           context: postgres-appliance/
           push: true
-          tags: ${{ needs.derive.outputs.tags }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ matrix.patroni_version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:latest
           platforms: linux/amd64,linux/arm64
           build-args: |
-            PGVERSION=${{ needs.derive.outputs.pgversion }}
+            PGVERSION=${{ matrix.pgversion }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # --- Trivy image scan (after push, only on main/tag) ---
+  # --- Trivy image scan (after push) ---
   scan-image:
-    name: Trivy image scan
+    name: Trivy scan PG ${{ matrix.pgversion }}
     runs-on: ubuntu-22.04
-    needs: push-multiarch
+    needs: [derive, push-multiarch]
     if: always() && needs.push-multiarch.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.derive.outputs.matrix) }}
     permissions:
       security-events: write
       contents: read
@@ -154,22 +159,45 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Trivy vulnerability scanner on built image
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: '${{ needs.derive.outputs.image_name }}:${{ needs.derive.outputs.patroni_version }}'
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ matrix.patroni_version }}'
           format: 'sarif'
-          output: 'trivy-image-results.sarif'
+          output: 'trivy-spilo-${{ matrix.pgversion }}-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
           ignore-unfixed: true
           trivyignores: '.trivyignore'
 
-      - name: Upload Trivy results to GitHub Security tab
+      - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-image-results.sarif'
-          category: 'trivy-image'
+          sarif_file: 'trivy-spilo-${{ matrix.pgversion }}-results.sarif'
+          category: 'trivy-spilo-${{ matrix.pgversion }}'
+
+  # --- Tag management ---
+  tag-release:
+    name: Tag release
+    runs-on: ubuntu-22.04
+    needs: [derive, push-multiarch]
+    if: github.ref_type == 'tag' && needs.push-multiarch.result == 'success'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Apply version tags to images
+        run: |
+          TAG="${{ github.ref_name }}"
+          PATRONIVERSION="${{ needs.derive.outputs.patroni_version }}"
+
+          for PG in 16 17 18; do
+            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${PG}"
+            docker pull "${IMAGE}:latest"
+            docker tag "${IMAGE}:latest" "${IMAGE}:${TAG}"
+            docker push "${IMAGE}:${TAG}"
+          done
+        env:
+          DOCKER_CLI_EXPERIMENTAL: enabled
 
   # --- Notify on failure ---
   notify-failure:
@@ -180,6 +208,6 @@ jobs:
     steps:
       - name: Log failure
         run: |
-          echo "Build or scan failed for ${{ needs.derive.outputs.image_name }}"
+          echo "Build or scan failed"
           echo "Push result: ${{ needs.push-multiarch.result }}"
           echo "Scan result: ${{ needs.scan-image.result }}"
