@@ -1,0 +1,213 @@
+name: Build and Publish Spilo Images
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      pgversion:
+        description: 'PostgreSQL version to build (default: all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - '16'
+          - '17'
+          - '18'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_ORG: runwhen-contrib
+
+jobs:
+  # --- Derive image metadata ---
+  derive:
+    name: Derive build metadata
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.meta.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Determine build matrix and metadata
+        id: meta
+        run: |
+          PATRONIVERSION=$(sed -n 's/^ENV PATRONIVERSION=\([0-9.]*\).*$/\1/p' postgres-appliance/Dockerfile)
+
+          if [[ "${{ inputs.pgversion }}" == "all" || -z "${{ inputs.pgversion }}" ]]; then
+            VERSIONS='["16","17","18"]'
+          else
+            VERSIONS='["${{ inputs.pgversion }}"]'
+          fi
+
+          MATRIX="{\"pgversion\":${VERSIONS},\"patroni_version\":[\"${PATRONIVERSION}\"]}"
+
+          echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
+          echo "patroni_version=${PATRONIVERSION}" >> $GITHUB_OUTPUT
+
+  # --- Build & test (amd64 only, one per PG version) ---
+  build-test:
+    name: Build & test PG ${{ matrix.pgversion }}
+    runs-on: ubuntu-22.04
+    needs: derive
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.derive.outputs.matrix) }}
+    outputs:
+      image_tag: ${{ steps.build.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install docker-compose (for tests)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq docker-compose-v2
+          sudo ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and load for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: postgres-appliance/
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test
+          build-args: |
+            PGVERSION=${{ matrix.pgversion }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test spilo docker image
+        id: test
+        env:
+          SPILO_TEST_IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test"
+        run: |
+          bash postgres-appliance/tests/test_spilo.sh
+
+      - name: Prepare push tag reference
+        id: build
+        run: |
+          echo "image_tag=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:test" >> $GITHUB_OUTPUT
+
+  # --- Build & push multi-arch (one per PG version, only on tag/main) ---
+  push-multiarch:
+    name: Push PG ${{ matrix.pgversion }}
+    runs-on: ubuntu-22.04
+    needs: [derive, build-test]
+    if: github.ref_type == 'tag' || github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.derive.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch
+        uses: docker/build-push-action@v6
+        with:
+          context: postgres-appliance/
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ matrix.patroni_version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:latest
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            PGVERSION=${{ matrix.pgversion }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # --- Trivy image scan (after push) ---
+  scan-image:
+    name: Trivy scan PG ${{ matrix.pgversion }}
+    runs-on: ubuntu-22.04
+    needs: [derive, push-multiarch]
+    if: always() && needs.push-multiarch.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.derive.outputs.matrix) }}
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ matrix.patroni_version }}'
+          format: 'sarif'
+          output: 'trivy-spilo-${{ matrix.pgversion }}-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          ignore-unfixed: true
+          trivyignores: '.trivyignore'
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-spilo-${{ matrix.pgversion }}-results.sarif'
+          category: 'trivy-spilo-${{ matrix.pgversion }}'
+
+  # --- Tag management ---
+  tag-release:
+    name: Tag release
+    runs-on: ubuntu-22.04
+    needs: [derive, push-multiarch]
+    if: github.ref_type == 'tag' && needs.push-multiarch.result == 'success'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Apply version tags to images
+        run: |
+          TAG="${{ github.ref_name }}"
+          PATRONIVERSION="${{ needs.derive.outputs.patroni_version }}"
+
+          for PG in 16 17 18; do
+            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${PG}"
+            docker pull "${IMAGE}:latest"
+            docker tag "${IMAGE}:latest" "${IMAGE}:${TAG}"
+            docker push "${IMAGE}:${TAG}"
+          done
+        env:
+          DOCKER_CLI_EXPERIMENTAL: enabled
+
+  # --- Notify on failure ---
+  notify-failure:
+    name: Notify on failure
+    runs-on: ubuntu-22.04
+    needs: [push-multiarch, scan-image]
+    if: always() && (needs.push-multiarch.result == 'failure' || needs.scan-image.result == 'failure')
+    steps:
+      - name: Log failure
+        run: |
+          echo "Build or scan failed"
+          echo "Push result: ${{ needs.push-multiarch.result }}"
+          echo "Scan result: ${{ needs.scan-image.result }}"

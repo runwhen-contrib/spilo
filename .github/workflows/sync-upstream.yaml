@@ -1,0 +1,92 @@
+name: Check Upstream Updates
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-upstream:
+    name: Detect upstream changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/zalando/spilo.git
+          git fetch upstream master
+
+      - name: Check for new commits
+        id: check
+        run: |
+          BEHIND=$(git rev-list HEAD..upstream/master --count)
+          echo "commits_behind=${BEHIND}" >> $GITHUB_OUTPUT
+
+          if [ "$BEHIND" -gt 0 ]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            git log HEAD..upstream/master --oneline > /tmp/upstream-commits.txt
+            git diff HEAD..upstream/master --stat -- postgres-appliance/ > /tmp/upstream-diff.txt
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create sync branch and PR
+        if: steps.check.outputs.has_updates == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BEHIND: ${{ steps.check.outputs.commits_behind }}
+        run: |
+          BRANCH="sync/upstream-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+
+          if git merge upstream/master -m "chore: sync with upstream ($BEHIND commits)"; then
+            echo "Clean merge"
+          else
+            echo "Conflicts detected — likely README.md"
+            git checkout --ours README.md
+            git add README.md
+            git commit -m "chore: sync with upstream ($BEHIND commits)
+
+          Conflicts in README.md resolved in favor of our version. Manual review needed."
+          fi
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "chore: sync with upstream ($BEHIND commits)" \
+            --body "$(cat <<EOF
+          ## Upstream Sync — Merge from zalando/spilo
+
+          **$BEHIND new commits** from [zalando/spilo@master](https://github.com/zalando/spilo/commits/master).
+
+          ### Upstream commits:
+          \`\`\`
+          $(cat /tmp/upstream-commits.txt)
+          \`\`\`
+
+          ### Files changed in postgres-appliance/:
+          \`\`\`
+          $(cat /tmp/upstream-diff.txt)
+          \`\`\`
+
+          ### Merge strategy
+          - \`postgres-appliance/\` files — merged from upstream (review for CVE-relevant changes)
+          - \`README.md\` — kept our version (manual review needed)
+          - CI/CD files (\`.github/\`, \`renovate.json\`, \`.trivyignore\`) — untouched
+
+          ### Post-merge checklist
+          - [ ] Review \`postgres-appliance/\` diffs for CVE fixes and breaking changes
+          - [ ] If Dockerfile build args changed, update \`renovate.json\`
+          - [ ] CI passes (build workflow runs on this PR)
+          - [ ] Merge when ready, or cherry-pick specific commits
+          EOF
+          )" \
+            --base main \
+            --head "$BRANCH"
