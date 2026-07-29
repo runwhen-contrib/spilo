@@ -1,0 +1,100 @@
+name: PR Build and Scan
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'postgres-appliance/**'
+      - '.github/workflows/pr-build.yaml'
+      - '.github/workflows/build-push.yaml'
+      - 'renovate.json'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_ORG: runwhen-contrib
+
+jobs:
+  # --- Filesystem Trivy scan (runs first, fast) ---
+  scan-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-22.04
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+
+      - name: Run Trivy vulnerability scanner on repo
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: 'fs'
+          scan-ref: 'postgres-appliance/'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          ignore-unfixed: true
+          trivyignores: '.trivyignore'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-fs-results.sarif'
+          category: 'trivy-fs'
+
+  # --- Derive image metadata ---
+  derive:
+    name: Derive image name
+    runs-on: ubuntu-22.04
+    outputs:
+      image_name: ${{ steps.meta.outputs.image_name }}
+      pgversion: ${{ steps.meta.outputs.pgversion }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+
+      - name: Extract build metadata
+        id: meta
+        run: |
+          PGVERSION=$(sed -n 's/^ARG PGVERSION=\([1-9][0-9]*\).*$/\1/p' postgres-appliance/Dockerfile)
+
+          # Tag with PR number and SHA for traceability
+          PR_NUM="${{ github.event.pull_request.number }}"
+          SHA_SHORT="${GITHUB_SHA::7}"
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${PGVERSION}:pr-${PR_NUM}-${SHA_SHORT}"
+
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "pgversion=${PGVERSION}" >> $GITHUB_OUTPUT
+
+  # --- Build & test (amd64 only, for speed) ---
+  build-test:
+    name: Build and test
+    runs-on: ubuntu-22.04
+    needs: [scan-fs, derive]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (amd64 for testing)
+        uses: docker/build-push-action@v6
+        with:
+          context: postgres-appliance/
+          load: true
+          tags: ${{ needs.derive.outputs.image_name }}
+          build-args: |
+            PGVERSION=${{ needs.derive.outputs.pgversion }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test spilo image
+        env:
+          SPILO_TEST_IMAGE: "${{ needs.derive.outputs.image_name }}"
+        run: |
+          bash postgres-appliance/tests/test_spilo.sh

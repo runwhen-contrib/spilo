@@ -1,0 +1,182 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":automergeDigest",
+    ":automergeBranch"
+  ],
+  "timezone": "America/New_York",
+  "schedule": [
+    "before 10am on monday"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "assignees": [
+    "@runwhen-contrib/maintainers"
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "rebaseWhen": "behind-base-branch",
+
+  "packageRules": [
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "automerge": true,
+      "matchUpdateTypes": ["patch", "pin", "digest"]
+    },
+    {
+      "description": "Group Docker-related updates",
+      "matchManagers": ["dockerfile"],
+      "groupName": "Docker base images",
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Patch updates - automerge after stability period",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Major updates - require manual review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major-update"],
+      "dependencyDashboardApproval": true
+    }
+  ],
+
+  "customManagers": [
+    {
+      "description": "Track PostgreSQL version in Dockerfile build arg",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "ARG PGVERSION=(?<currentValue>\\d+)"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "postgres"
+    },
+    {
+      "description": "Track Patroni version in Dockerfile ENV",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "ENV PATRONIVERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "patroni"
+    },
+    {
+      "description": "Track wal-g version in Dockerfile ENV",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "ENV WALG_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "wal-g/wal-g",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "description": "Track base image (ubuntu) in Dockerfile ARG",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "ARG BASE_IMAGE=ubuntu:(?<currentValue>\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "ubuntu"
+    },
+    {
+      "description": "Track PostGIS version in Dockerfile ENV",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "ENV POSTGIS_VERSION=(?<currentValue>\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "postgis/postgis"
+    },
+    {
+      "description": "Track bg_mon commit ref",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "BG_MON_COMMIT=(?<currentValue>[a-f0-9]{40})"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "CyberDem0n/bg_mon"
+    },
+    {
+      "description": "Track pg_auth_mon commit ref",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "PG_AUTH_MON_COMMIT=(?<currentValue>[a-f0-9]{40})"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "zalando-pg/pg_auth_mon"
+    },
+    {
+      "description": "Track pg_mon commit ref",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "PG_MON_COMMIT=(?<currentValue>[a-f0-9]{40})"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "zalando-pg/pg_mon"
+    },
+    {
+      "description": "Track plprofiler version",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "PLPROFILER=(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "bigsql/plprofiler"
+    },
+    {
+      "description": "Track pg_profile version",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "PG_PROFILE=(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "zubkov-andrei/pg_profile"
+    },
+    {
+      "description": "Track pam_oauth2 version",
+      "customType": "regex",
+      "fileMatch": ["^postgres-appliance/Dockerfile$"],
+      "matchStrings": [
+        "PAM_OAUTH2=(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "zalando-pg/pam-oauth2"
+    },
+    {
+      "description": "Track GitHub Action versions in workflow files",
+      "customType": "regex",
+      "fileMatch": ["^.github/workflows/.*\\.ya?ml$"],
+      "matchStrings": [
+        "uses: (?<depName>[^@]+)@(?<currentValue>v?[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ],
+      "datasourceTemplate": "github-tags"
+    }
+  ],
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"]
+  },
+  "osvVulnerabilityAlerts": true
+}

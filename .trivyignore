@@ -1,0 +1,11 @@
+# Trivy Ignore - Known False Positives and Accepted Risks
+#
+# Format: VulnerabilityID    ExpiryDate    Reason
+#
+# Add entries below when Trivy reports CVEs that are:
+#   1. False positives (not actually exploitable in our context)
+#   2. Accepted risks (mitigated by other controls)
+#   3. Fixed in an upstream dependency but not yet in our base image
+#
+# Example:
+# CVE-2023-12345   2026-12-31   False positive - only affects interactive session, not our use case
