@@ -105,4 +105,5 @@ jobs:
         env:
           SPILO_TEST_IMAGE: "${{ needs.derive.outputs.image_name }}"
         run: |
+          sed -i "s/PGVERSION: '14'/PGVERSION: '${{ needs.derive.outputs.pgversion }}'/" postgres-appliance/tests/docker-compose.yml
           bash postgres-appliance/tests/test_spilo.sh
