@@ -185,7 +185,6 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.derive.outputs.matrix) }}
     permissions:
-      security-events: write
       contents: read
     steps:
       - uses: actions/checkout@v5
@@ -197,22 +196,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ matrix.patroni_version }}'
-          format: 'sarif'
-          output: 'trivy-spilo-${{ matrix.pgversion }}-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
-          ignore-unfixed: true
-          trivyignores: '.trivyignore'
+      - name: Install Trivy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-      - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Scan image
+        id: scan
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ matrix.patroni_version }}"
+          trivy image --severity CRITICAL,HIGH --ignore-unfixed --scanners vuln --format json "$IMAGE" > trivy-results.json
+
+      - name: Generate markdown report
+        id: report
+        run: |
+          jq -r '
+            [.Results[]?.Vulnerabilities[]? // empty]
+            | group_by(.VulnerabilityID)
+            | map(.[0])
+            | sort_by(.Severity, .PkgName)
+            | (["| Package | CVE | Installed | Fixed | Severity |",
+               "|---------|-----|-----------|-------|----------|"]),
+              (.[] | "| \(.PkgName) | [\(.VulnerabilityID)](https://nvd.nist.gov/vuln/detail/\(.VulnerabilityID)) | \(.InstalledVersion) | \(.FixedVersion // "N/A") | \(.Severity) |")
+          ' trivy-results.json > trivy-report-${{ matrix.pgversion }}.md
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: 'trivy-spilo-${{ matrix.pgversion }}-results.sarif'
-          category: 'trivy-spilo-${{ matrix.pgversion }}'
+          name: trivy-scan-spilo-${{ matrix.pgversion }}
+          path: |
+            trivy-results.json
+            trivy-report-${{ matrix.pgversion }}.md
 
   # --- Tag management ---
   tag-release:

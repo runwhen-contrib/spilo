@@ -19,28 +19,40 @@ jobs:
     name: Trivy filesystem scan
     runs-on: ubuntu-22.04
     permissions:
-      security-events: write
       contents: read
     steps:
       - uses: actions/checkout@v5
 
-      - name: Run Trivy vulnerability scanner on repo
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: 'fs'
-          scan-ref: 'postgres-appliance/'
-          format: 'sarif'
-          output: 'trivy-fs-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
-          ignore-unfixed: true
-          trivyignores: '.trivyignore'
+      - name: Install Trivy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-      - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Scan repository
+        id: scan
+        run: |
+          trivy fs --severity CRITICAL,HIGH --scanners vuln --format json postgres-appliance/ > trivy-fs-results.json
+
+      - name: Generate markdown report
+        run: |
+          jq -r '
+            [.Results[]?.Vulnerabilities[]? // empty]
+            | group_by(.VulnerabilityID)
+            | map(.[0])
+            | sort_by(.Severity, .PkgName)
+            | (["| File | Package | CVE | Severity |",
+               "|------|---------|-----|----------|"]),
+              (.[] | "| \(.Target) | \(.PkgName) | [\(.VulnerabilityID)](https://nvd.nist.gov/vuln/detail/\(.VulnerabilityID)) | \(.Severity) |")
+          ' trivy-fs-results.json > trivy-fs-report.md
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: 'trivy-fs-results.sarif'
-          category: 'trivy-fs'
+          name: trivy-fs-scan
+          path: |
+            trivy-fs-results.json
+            trivy-fs-report.md
 
   # --- Derive image metadata ---
   derive:
