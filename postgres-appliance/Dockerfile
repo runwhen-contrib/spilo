@@ -29,6 +29,7 @@ RUN bash /builddeps/dependencies.sh
 
 FROM golang:1.25-bookworm AS walg-builder
 ARG WALG_VERSION
+ENV GOEXPERIMENT=jsonv2
 WORKDIR /walg
 RUN git clone --depth 1 --branch ${WALG_VERSION} https://github.com/wal-g/wal-g.git .
 RUN go get google.golang.org/grpc@v1.82.1 \
