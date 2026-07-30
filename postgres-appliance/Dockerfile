@@ -3,6 +3,7 @@ ARG PGVERSION=18
 ARG DEMO=false
 ARG COMPRESS=false
 ARG ADDITIONAL_LOCALES=
+ARG WALG_VERSION=v3.0.8
 
 
 FROM ubuntu:18.04 as ubuntu-18
@@ -17,14 +18,26 @@ RUN bash /builddeps/locales.sh
 FROM $BASE_IMAGE as dependencies-builder
 
 ARG DEMO
-
-ENV WALG_VERSION=v3.0.8
+ARG WALG_VERSION
 
 COPY build_scripts/dependencies.sh /builddeps/
 
 COPY dependencies/debs /builddeps/
 
 RUN bash /builddeps/dependencies.sh
+
+
+FROM golang:1.26-bookworm AS walg-builder
+ARG WALG_VERSION
+WORKDIR /walg
+RUN git clone --depth 1 --branch ${WALG_VERSION} https://github.com/wal-g/wal-g.git .
+RUN go get google.golang.org/grpc@v1.82.1 \
+    && go get github.com/jackc/pgx/v5@v5.9.0 \
+    && go get golang.org/x/crypto@v0.52.0 \
+    && go get golang.org/x/net@v0.55.0 \
+    && go get golang.org/x/text@v0.39.0 \
+    && go mod tidy
+RUN CGO_ENABLED=0 go build -o /walg -ldflags="-s -w" main/pg/main.go
 
 
 FROM $BASE_IMAGE as builder-false
@@ -64,7 +77,7 @@ WORKDIR /builddeps
 RUN bash base.sh
 
 # Install wal-g
-COPY --from=dependencies-builder /builddeps/wal-g /usr/local/bin/
+COPY --from=walg-builder /walg /usr/local/bin/wal-g
 
 COPY build_scripts/patroni.sh build_scripts/compress_build.sh /builddeps/
 

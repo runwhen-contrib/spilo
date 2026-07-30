@@ -73,11 +73,11 @@
       "depNameTemplate": "patroni"
     },
     {
-      "description": "Track wal-g version in Dockerfile ENV",
+      "description": "Track wal-g version in Dockerfile ARG",
       "customType": "regex",
       "fileMatch": ["^postgres-appliance/Dockerfile$"],
       "matchStrings": [
-        "ENV WALG_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+        "ARG WALG_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "wal-g/wal-g",
