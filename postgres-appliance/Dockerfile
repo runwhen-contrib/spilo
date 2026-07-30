@@ -27,7 +27,7 @@ COPY dependencies/debs /builddeps/
 RUN bash /builddeps/dependencies.sh
 
 
-FROM golang:1.26-bookworm AS walg-builder
+FROM golang:1.25-bookworm AS walg-builder
 ARG WALG_VERSION
 WORKDIR /walg
 RUN git clone --depth 1 --branch ${WALG_VERSION} https://github.com/wal-g/wal-g.git .
