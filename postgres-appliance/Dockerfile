@@ -38,7 +38,7 @@ RUN go get google.golang.org/grpc@v1.82.1 \
     && go get golang.org/x/net@v0.55.0 \
     && go get golang.org/x/text@v0.39.0 \
     && go mod tidy
-RUN CGO_ENABLED=0 go build -o /walg -ldflags="-s -w" main/pg/main.go
+RUN CGO_ENABLED=0 go build -o /usr/local/bin/wal-g -ldflags="-s -w" main/pg/main.go
 
 
 FROM $BASE_IMAGE as builder-false
@@ -78,7 +78,7 @@ WORKDIR /builddeps
 RUN bash base.sh
 
 # Install wal-g
-COPY --from=walg-builder /walg /usr/local/bin/wal-g
+COPY --from=walg-builder /usr/local/bin/wal-g /usr/local/bin/wal-g
 
 COPY build_scripts/patroni.sh build_scripts/compress_build.sh /builddeps/
 
