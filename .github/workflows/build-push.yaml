@@ -183,7 +183,7 @@ jobs:
           SHA="${{ needs.derive.outputs.sha_short }}"
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}"
           docker pull "${IMAGE}:${SHA}"
-          PG_FULL=$(docker run --rm --entrypoint pg_config "${IMAGE}:${SHA}" --version | sed 's/PostgreSQL //')
+          PG_FULL=$(docker run --rm --entrypoint pg_config "${IMAGE}:${SHA}" --version | sed -E 's/PostgreSQL ([0-9]+\.[0-9]+).*/\1/')
           docker tag "${IMAGE}:${SHA}" "${IMAGE}:${PG_FULL}-${SHA}"
           docker push "${IMAGE}:${PG_FULL}-${SHA}"
           echo "pg_full=${PG_FULL}" >> $GITHUB_OUTPUT
