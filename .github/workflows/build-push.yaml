@@ -35,6 +35,7 @@ jobs:
     outputs:
       matrix: ${{ steps.meta.outputs.matrix }}
       platforms: ${{ steps.meta.outputs.platforms }}
+      sha_short: ${{ steps.meta.outputs.sha_short }}
     steps:
       - uses: actions/checkout@v5
 
@@ -59,6 +60,7 @@ jobs:
           MATRIX="{\"include\":[${ENTRIES}]}"
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
           echo "patroni_version=${PATRONIVERSION}" >> $GITHUB_OUTPUT
+          echo "sha_short=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
           
           # Platform selection: amd64 only by default, multi-arch when explicitly enabled
           if [[ "${{ inputs.multiarch }}" == "true" ]]; then
@@ -166,7 +168,7 @@ jobs:
           context: postgres-appliance/
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ needs.derive.outputs.sha_short }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:latest
           platforms: ${{ needs.derive.outputs.platforms }}
           build-args: |
@@ -174,6 +176,20 @@ jobs:
             PGOLDVERSIONS=${{ matrix.pgoldversions }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Annotate pushed tags
+        run: |
+          SHA="${{ needs.derive.outputs.sha_short }}"
+          PG="${{ matrix.pgversion }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${PG}"
+          {
+            echo "### Pushed spilo-${PG}"
+            echo ""
+            echo "\`\`\`"
+            echo "docker pull ${IMAGE}:${SHA}"
+            echo "docker pull ${IMAGE}:latest"
+            echo "\`\`\`"
+          } >> $GITHUB_STEP_SUMMARY
 
   # --- Trivy image scan (after push) ---
   scan-image:
@@ -205,7 +221,7 @@ jobs:
       - name: Scan image
         id: scan
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ github.sha }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ needs.derive.outputs.sha_short }}"
           trivy image --severity CRITICAL,HIGH --ignore-unfixed --scanners vuln --format json "$IMAGE" > trivy-results.json
 
       - name: Generate markdown report
