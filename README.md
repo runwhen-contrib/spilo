@@ -20,7 +20,7 @@ The upstream [zalando/spilo](https://github.com/zalando/spilo) project does not 
 | 17 | `ghcr.io/runwhen-contrib/spilo-17` | Active |
 | 16 | `ghcr.io/runwhen-contrib/spilo-16` | Active |
 
-**Tags**: `{patroni-version}-p{counter}` (e.g., `4.1-p2`) plus `latest`.
+**Tags**: `{git-sha}` (immutable) plus `latest` (rolling). Examples: `spilo-18:8a3f2c1b`, `spilo-18:latest`.
 
 ## Quick Start
 

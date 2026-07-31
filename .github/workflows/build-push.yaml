@@ -45,7 +45,7 @@ jobs:
 
           build_matrix() {
             local pg=$1 olds=$2
-            printf '{"pgversion":"%s","pgoldversions":"%s","patroni_version":"%s"}' "$pg" "$olds" "$PATRONIVERSION"
+            printf '{"pgversion":"%s","pgoldversions":"%s"}' "$pg" "$olds"
           }
 
           if [[ "${{ inputs.pgversion }}" == "all" || -z "${{ inputs.pgversion }}" ]]; then
@@ -166,7 +166,7 @@ jobs:
           context: postgres-appliance/
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ matrix.patroni_version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:latest
           platforms: ${{ needs.derive.outputs.platforms }}
           build-args: |
@@ -205,7 +205,7 @@ jobs:
       - name: Scan image
         id: scan
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ matrix.patroni_version }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}:${{ github.sha }}"
           trivy image --severity CRITICAL,HIGH --ignore-unfixed --scanners vuln --format json "$IMAGE" > trivy-results.json
 
       - name: Generate markdown report
