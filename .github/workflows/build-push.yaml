@@ -177,15 +177,28 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Extract PG version and retag
+        id: retag
+        run: |
+          SHA="${{ needs.derive.outputs.sha_short }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${{ matrix.pgversion }}"
+          docker pull "${IMAGE}:${SHA}"
+          PG_FULL=$(docker run --rm --entrypoint pg_config "${IMAGE}:${SHA}" --version | sed 's/PostgreSQL //')
+          docker tag "${IMAGE}:${SHA}" "${IMAGE}:${PG_FULL}-${SHA}"
+          docker push "${IMAGE}:${PG_FULL}-${SHA}"
+          echo "pg_full=${PG_FULL}" >> $GITHUB_OUTPUT
+
       - name: Annotate pushed tags
         run: |
           SHA="${{ needs.derive.outputs.sha_short }}"
           PG="${{ matrix.pgversion }}"
+          PG_FULL="${{ steps.retag.outputs.pg_full }}"
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/spilo-${PG}"
           {
             echo "### Pushed spilo-${PG}"
             echo ""
             echo "\`\`\`"
+            echo "docker pull ${IMAGE}:${PG_FULL}-${SHA}"
             echo "docker pull ${IMAGE}:${SHA}"
             echo "docker pull ${IMAGE}:latest"
             echo "\`\`\`"
