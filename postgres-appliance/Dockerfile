@@ -27,7 +27,7 @@ COPY dependencies/debs /builddeps/
 RUN bash /builddeps/dependencies.sh
 
 
-FROM golang:1.25-bookworm AS walg-builder
+FROM golang:1.26-bookworm AS walg-builder
 ARG WALG_VERSION
 ENV GOEXPERIMENT=jsonv2
 WORKDIR /walg
