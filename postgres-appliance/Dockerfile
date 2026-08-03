@@ -83,7 +83,7 @@ COPY --from=walg-builder /usr/local/bin/wal-g /usr/local/bin/wal-g
 COPY build_scripts/patroni.sh build_scripts/compress_build.sh /builddeps/
 
 # Install patroni
-ENV PATRONIVERSION=4.1.0
+ENV PATRONIVERSION=4.1.4
 
 WORKDIR /
 
