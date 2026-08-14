@@ -37,8 +37,8 @@
       "minimumReleaseAge": "3 days"
     },
     {
-      "description": "Patch updates - automerge after stability period",
-      "matchUpdateTypes": ["patch"],
+      "description": "Minor and patch updates - automerge after stability period",
+      "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "minimumReleaseAge": "3 days"
     },
