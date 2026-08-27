@@ -21,11 +21,18 @@ apt-cache depends patroni \
 pip3 install setuptools
 
 if [ "$DEMO" != "true" ]; then
-    EXTRAS=",etcd,consul,zookeeper,aws"
+    # zookeeper/kazoo deliberately omitted: python3-kazoo Depends on
+    # python3-gevent, and jammy ships gevent 21.8.0 which carries
+    # CVE-2023-41419 with no fixed package available for 22.04 (Ubuntu marks
+    # jammy "needed"; only noble is not-affected). Nothing in this appliance's
+    # deployment uses ZooKeeper as a DCS — the runwhen-platform chart runs
+    # Patroni against the Kubernetes DCS exclusively ("no etcd/zookeeper ...
+    # the only production-supported mode"), so kazoo was dead weight that
+    # existed only to pull in a vulnerable transitive dependency.
+    EXTRAS=",etcd,consul,aws"
     apt-get install -y \
         python3-etcd \
         python3-consul \
-        python3-kazoo \
         python3-boto3 \
         python3-botocore \
         python3-cachetools \
