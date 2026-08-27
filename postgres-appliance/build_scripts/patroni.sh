@@ -40,7 +40,15 @@ if [ "$DEMO" != "true" ]; then
         python3-rsa \
         python3-s3transfer
 
-    find /usr/share/python-babel-localedata/locale-data -type f ! -name 'en_US*.dat' -delete
+    # Prune babel locale data only if it is present. It arrives transitively
+    # via python3-kazoo -> python3-jinja2 -> python3-babel ->
+    # python-babel-localedata, so dropping kazoo above removes it entirely and
+    # this directory no longer exists. Unguarded, `find` fails and `set -e`
+    # kills the build. This step is a size optimisation, so nothing to prune
+    # is a success, not an error.
+    if [ -d /usr/share/python-babel-localedata/locale-data ]; then
+        find /usr/share/python-babel-localedata/locale-data -type f ! -name 'en_US*.dat' -delete
+    fi
 
     pip3 install protobuf \
             'git+https://github.com/zalando/pg_view.git@master#egg=pg-view'
