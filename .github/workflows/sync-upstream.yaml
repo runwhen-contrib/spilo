@@ -18,6 +18,15 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Required before any commit. Without it the merge path died with
+      # `fatal: empty ident name (for <runner@...>) not allowed`. Every sync is
+      # a non-fast-forward merge, so this is needed on the clean path too, not
+      # just for conflicts.
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Add upstream remote
         run: |
           git remote add upstream https://github.com/zalando/spilo.git
@@ -52,9 +61,44 @@ jobs:
             echo "Conflicts detected — likely README.md"
             git checkout --ours README.md
             git add README.md
+
+            # The README.md step above resolves nothing unless README.md is
+            # actually one of the conflicted paths. When anything else
+            # conflicts, `git commit` used to run on an unresolved index and
+            # fail with a confusing error. Stop here instead and let a human
+            # do the merge.
+            UNRESOLVED=$(git diff --name-only --diff-filter=U)
+            if [ -n "$UNRESOLVED" ]; then
+              echo "::error::Upstream merge has conflicts that need a manual merge:"
+              echo "$UNRESOLVED"
+              git merge --abort
+              exit 1
+            fi
+
             git commit -m "chore: sync with upstream ($BEHIND commits)
 
           Conflicts in README.md resolved in favor of our version. Manual review needed."
+          fi
+
+          # Upstream's CI must never run in this org. Their workflow files are
+          # absent here, so a sync brings them in as a clean ADD — they never
+          # surface as a conflict and the block above never sees them. Drop
+          # anything under .github/ that is not one of ours. Listing what we
+          # own rather than what they have also covers workflows upstream adds
+          # later; naming their current three would not.
+          OURS=" .github/workflows/build-push.yaml .github/workflows/pr-build.yaml .github/workflows/renovate.yml .github/workflows/sync-upstream.yaml .github/workflows/trivy-scheduled.yaml "
+
+          DROPPED=""
+          for f in $(git ls-files .github/); do
+            case "$OURS" in
+              *" $f "*) ;;
+              *) git rm -q -- "$f"; DROPPED="$DROPPED $f" ;;
+            esac
+          done
+
+          if [ -n "$DROPPED" ]; then
+            echo "Dropped upstream CI pulled in by this sync:$DROPPED"
+            git commit -q -m "chore: drop upstream CI pulled in by the sync"
           fi
 
           git push origin "$BRANCH"

@@ -1,0 +1,15 @@
+site_name: Spilo PostgreSQL appliance
+repo_url: https://github.com/zalando/spilo/
+theme: readthedocs
+
+pages:
+  - Introduction: index.md
+  - Design: DESIGN.md
+  - Prerequisites: prerequisites.md
+  - Administrator Guide:
+    - Deploy spilo: admin-guide/deploy_spilo.md
+    - Connect to spilo: user-guide/connect_spilo.md
+    - Sizing spilo: admin-guide/sizing.md
+    - Update : admin-guide/update.md
+    - Manual failover: admin-guide/failover.md
+  - Configuration: configuration.md
