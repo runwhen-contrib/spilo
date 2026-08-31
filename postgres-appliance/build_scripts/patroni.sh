@@ -21,11 +21,18 @@ apt-cache depends patroni \
 pip3 install setuptools
 
 if [ "$DEMO" != "true" ]; then
-    EXTRAS=",etcd,consul,zookeeper,aws"
+    # zookeeper/kazoo deliberately omitted: python3-kazoo Depends on
+    # python3-gevent, and jammy ships gevent 21.8.0 which carries
+    # CVE-2023-41419 with no fixed package available for 22.04 (Ubuntu marks
+    # jammy "needed"; only noble is not-affected). Nothing in this appliance's
+    # deployment uses ZooKeeper as a DCS — the runwhen-platform chart runs
+    # Patroni against the Kubernetes DCS exclusively ("no etcd/zookeeper ...
+    # the only production-supported mode"), so kazoo was dead weight that
+    # existed only to pull in a vulnerable transitive dependency.
+    EXTRAS=",etcd,consul,aws"
     apt-get install -y \
         python3-etcd \
         python3-consul \
-        python3-kazoo \
         python3-boto3 \
         python3-botocore \
         python3-cachetools \
@@ -33,7 +40,15 @@ if [ "$DEMO" != "true" ]; then
         python3-rsa \
         python3-s3transfer
 
-    find /usr/share/python-babel-localedata/locale-data -type f ! -name 'en_US*.dat' -delete
+    # Prune babel locale data only if it is present. It arrives transitively
+    # via python3-kazoo -> python3-jinja2 -> python3-babel ->
+    # python-babel-localedata, so dropping kazoo above removes it entirely and
+    # this directory no longer exists. Unguarded, `find` fails and `set -e`
+    # kills the build. This step is a size optimisation, so nothing to prune
+    # is a success, not an error.
+    if [ -d /usr/share/python-babel-localedata/locale-data ]; then
+        find /usr/share/python-babel-localedata/locale-data -type f ! -name 'en_US*.dat' -delete
+    fi
 
     pip3 install protobuf \
             'git+https://github.com/zalando/pg_view.git@master#egg=pg-view'
