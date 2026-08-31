@@ -32,9 +32,8 @@ ARG WALG_VERSION
 ENV GOEXPERIMENT=jsonv2
 WORKDIR /walg
 RUN git clone --depth 1 --branch ${WALG_VERSION} https://github.com/wal-g/wal-g.git .
-RUN go mod download \
-    && go mod edit -exclude github.com/apache/cloudberry-go-libs@v1.0.11 \
-    && go get github.com/apache/cloudberry-go-libs@v1.0.12-0.20260624080114-3de23e29a87a \
+RUN go mod edit -replace github.com/apache/cloudberry-go-libs=github.com/apache/cloudberry-go-libs@v1.0.12-0.20260624080114-3de23e29a87a \
+    && go mod download \
     && go get google.golang.org/grpc@v1.82.1 \
     && go get github.com/jackc/pgx/v5@v5.9.0 \
     && go get golang.org/x/crypto@v0.52.0 \
