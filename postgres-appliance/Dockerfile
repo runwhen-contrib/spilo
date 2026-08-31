@@ -3,7 +3,7 @@ ARG PGVERSION=18
 ARG DEMO=false
 ARG COMPRESS=false
 ARG ADDITIONAL_LOCALES=
-ARG WALG_VERSION=v3.0.8
+ARG WALG_VERSION=v3.0.9
 
 
 FROM ubuntu:18.04 as ubuntu-18
@@ -32,7 +32,9 @@ ARG WALG_VERSION
 ENV GOEXPERIMENT=jsonv2
 WORKDIR /walg
 RUN git clone --depth 1 --branch ${WALG_VERSION} https://github.com/wal-g/wal-g.git .
-RUN go get google.golang.org/grpc@v1.82.1 \
+RUN go mod edit -replace github.com/apache/cloudberry-go-libs=github.com/apache/cloudberry-go-libs@v1.0.12-0.20260624080114-3de23e29a87a \
+    && go mod download \
+    && go get google.golang.org/grpc@v1.82.1 \
     && go get github.com/jackc/pgx/v5@v5.9.0 \
     && go get golang.org/x/crypto@v0.52.0 \
     && go get golang.org/x/net@v0.55.0 \
