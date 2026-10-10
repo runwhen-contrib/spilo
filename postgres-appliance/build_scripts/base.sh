@@ -61,7 +61,7 @@ apt-get install -y \
     libevent-pthreads-2.1 \
     brotli \
     libbrotli1 \
-    python3.10 \
+    python3 \
     python3-psycopg2
 
 # forbid creation of a main cluster when package is installed

@@ -5,15 +5,19 @@ networks:
 
 services:
     minio:
-        image: minio/minio:RELEASE.2021-09-03T03-56-13Z
+        # minio/minio was removed from Docker Hub (the repo now returns
+        # "pull access denied") and the official quay.io image requires
+        # authentication. Fall back to Bitnami's archived image, which still
+        # ships the `minio` server and the same S3 API.
+        image: bitnamilegacy/minio:2025.7.23-debian-12-r5
         networks: [ demo ]
         environment:
-            MINIO_ACCESS_KEY: &access_key Eeghei0uVej1Wea8mato
-            MINIO_SECRET_KEY: &secret_key lecheidohbah7aThohziezah3iev7ima4eeXu9gu
+            MINIO_ROOT_USER: &access_key Eeghei0uVej1Wea8mato
+            MINIO_ROOT_PASSWORD: &secret_key lecheidohbah7aThohziezah3iev7ima4eeXu9gu
         hostname: minio
         container_name: demo-minio
         entrypoint: sh
-        command: -c 'mkdir -p /export/testbucket && /usr/bin/minio server /export'
+        command: -c 'mkdir -p /tmp/export/testbucket && /opt/bitnami/minio/bin/minio server /tmp/export --address :9000'
 
     etcd:
         image: ${SPILO_TEST_IMAGE:-spilo}
