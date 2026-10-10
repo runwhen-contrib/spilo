@@ -1,4 +1,5 @@
-FROM ubuntu:24.04
+# renovate: ignore
+FROM ubuntu:22.04
 
 LABEL maintainer="Alexander Kukushkin <alexander.kukushkin@zalando.de>"
 

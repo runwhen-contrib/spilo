@@ -6,6 +6,11 @@
 
 export DEBIAN_FRONTEND=noninteractive
 
+# Ubuntu 24.04 ships a PEP 668 "externally managed" Python and refuses
+# system-wide pip installs unless this is set. pip < 23 (e.g. jammy's 22.0.2)
+# ignores the variable, so it is safe on older bases too.
+export PIP_BREAK_SYSTEM_PACKAGES=1
+
 set -ex
 
 BUILD_PACKAGES=(python3-pip python3-wheel python3-dev git patchutils binutils gcc)
@@ -58,14 +63,15 @@ fi
 
 pip3 install "patroni[kubernetes$EXTRAS]==$PATRONIVERSION"
 
-for d in /usr/local/lib/python3.10 /usr/lib/python3; do
-    cd $d/dist-packages
-    find . -type d -name tests -print0 | xargs -0 rm -fr
+for d in /usr/local/lib/python3*/dist-packages /usr/lib/python3/dist-packages; do
+    [ -d "$d" ] || continue
+    cd "$d"
+    find . -type d -name tests -print0 | xargs -0 -r rm -fr
     find . -type f -name 'test_*.py*' -delete
+    find . -type f -name 'unittest_*.py*' -delete
+    find . -type f -name '*_test.py' -delete
+    find . -type f -name '*_test.cpython*.pyc' -delete
 done
-find . -type f -name 'unittest_*.py*' -delete
-find . -type f -name '*_test.py' -delete
-find . -type f -name '*_test.cpython*.pyc' -delete
 
 # Clean up
 apt-get purge -y "${BUILD_PACKAGES[@]}"

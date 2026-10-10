@@ -6,7 +6,8 @@ ARG ADDITIONAL_LOCALES=
 ARG WALG_VERSION=v3.0.9
 
 
-FROM ubuntu:24.04 as ubuntu-18
+# renovate: ignore
+FROM ubuntu:18.04 as ubuntu-18
 
 ARG ADDITIONAL_LOCALES
 
